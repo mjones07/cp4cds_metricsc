@@ -9,38 +9,60 @@ import os
 # needs to do tests and logging
 
 
-def esgf_search():
-
-    # all c3s-cmip5
-    ESGF_SEARCH_URI = 'https://index.mips.copernicus-climate.eu/esg-search'
-    ESGF_SEARCH_PROJ_NAME = 'c3s-cmip5'
-    EXPECTED_HITS = 27475
-
-    conn = SearchConnection(ESGF_SEARCH_URI)
-    ctx = conn.new_context(project=ESGF_SEARCH_PROJ_NAME,
+def esgf_search(esgf_search_uri, esgf_search_proj_name, var_standard_name, total_exp_hits, var_exp_hits):
+    conn = SearchConnection(esgf_search_uri)
+    ctx = conn.new_context(project=esgf_search_proj_name,
                            )
 
+    # project search
     results = ctx.search()
-
     hits = results.context.hit_count
 
-    if hits >= EXPECTED_HITS:
+    if hits >= total_exp_hits:
         ret_val = 1
     else:
         return 0
 
-    # air temp
-    ctx = conn.new_context(project=ESGF_SEARCH_PROJ_NAME,
-                           cf_standard_name='air temperature')
-    results = ctx.search()
-    air_expected_hits = 3557
-    hits =results.context.hit_count
-    if hits >= air_expected_hits:
-        ret_val = 1
-    else:
+    # variable
+    if var_standard_name is not None:
+        ctx = conn.new_context(project=esgf_search_proj_name,
+                               cf_standard_name=var_standard_name)
+        results = ctx.search()
+        hits = results.context.hit_count
+        if hits >= var_exp_hits:
+            ret_val = 1
+        else:
+            return 0
+
+    return ret_val
+
+def esgf_search_check():
+
+    # all c3s-cmip5
+    esgf_search_uris = ['https://index.mips.copernicus-climate.eu/esg-search']
+    esgf_search_proj_names = ['c3s-cmip5']
+    var_standard_names = ['air_temperature']
+    total_expected_hits = [27475]
+    var_expected_hits = [3557]
+
+    for i in range(len(esgf_search_uris)):
+        retval = esgf_search(esgf_search_uris[i],
+                    esgf_search_proj_names[i],
+                    var_standard_names[i],
+                    total_expected_hits[i],
+                    var_expected_hits[i])
+
+        if retval == 0:
+            return 0
+
+    return retval
+
+
+
+def download_check(dap_uri):
+    if not dap_uri:
         return 0
 
-def download_test(dap_uri):
     dataset = open_url(dap_uri)
     if not dataset:
         return 0
@@ -54,11 +76,11 @@ def download_test(dap_uri):
     return 1
 
 
-def opendap_test():
+def opendap_check():
     dap_uris = []# needs authenticating to download ['https://data.mips.copernicus-climate.eu/thredds/dodsC/esg_c3s-cmip5/output1/BCC/bcc-csm1-1-m/amip/day/atmos/day/r1i1p1/rsds/v20181201/rsds_day_bcc-csm1-1-m_amip_r1i1p1_19790101-19931231.nc.html']
 
     for dap_uri in dap_uris:
-        if download_test(dap_uri):
+        if download_check(dap_uri):
             pass
         else:
             return 0
@@ -86,12 +108,12 @@ class FlaskPrometheusView:
         total_service = []
 
         # esgf search
-        esgf_status = esgf_search()
+        esgf_status = esgf_search_check()
         self.service_status_list['esgf_search'].set(esgf_status)
         total_service.append(esgf_status)
 
         # opendap test
-        opendap_status = opendap_test()
+        opendap_status = opendap_check()
         self.service_status_list['opendap'].set(opendap_status)
         total_service.append(opendap_status)
 
